@@ -1,1 +1,16 @@
-GET http://localhost:3000/books/15/
+### Add book
+POST http://localhost:3000/postbooks/64/
+Content-Type: application/json
+
+{
+  "title": "Harry Potter and the Order of the Phoenix",
+  "author": "Bhagavan Pavan",
+  "rating": 4.67
+}
+
+### Get all books
+GET http://localhost:3000/books/
+
+### Get url with parameters
+
+GET http://localhost:3000/books/?offset=2&limit=4&search_q=The&order_by=price&order=DESC
