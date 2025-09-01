@@ -14,3 +14,29 @@ GET http://localhost:3000/books/
 ### Get url with parameters
 
 GET http://localhost:3000/books/?offset=2&limit=4&search_q=The&order_by=price&order=DESC
+
+### Create new user in user table
+
+POST http://localhost:3000/usersregister/
+Const-Type: application/json
+
+{
+  "id" : 20,
+  "username" : "@darling",
+  "password" : "Darling123",
+  "name" : "Darling",
+  "gender": "Female",
+  "location" : "Kanimetta"
+}
+
+### Login request API
+
+POST http://localhost:3000/login/
+Content-Type: application/json
+
+{
+  "username" : "pavan",
+  "password" : "pavan@123"
+}
+
+
