@@ -1,169 +1,220 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const { request } = require("http");
 const path = require("path");
 const { open } = require("sqlite");
 const sqlite3 = require("sqlite3");
 const jwt = require("jsonwebtoken");
 
-
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Database file
 const dbPath = path.join(__dirname, "user.db");
-
 let db = null;
+
+// JWT secret (same everywhere)
+const JWT_SECRET = "MY_SECRET_TOKEN";
+
+// ==================== Initialize DB and Server ====================
 const initializeDBAndServer = async () => {
   try {
-    console.log("DB Path:", dbPath); // Debug path
     db = await open({
       filename: dbPath,
       driver: sqlite3.Database,
     });
+
+    // Start server
     app.listen(3000, () => {
       console.log("Server is running at http://localhost:3000/");
     });
   } catch (e) {
-    console.log(`DB Error: ${e.message}`);
+    console.error(`DB Error: ${e.message}`);
     process.exit(1);
   }
 };
 
-initializeDBAndServer();      // very important
+initializeDBAndServer();
 
-// ==================== Register users ====================
+// ==================== Middleware 1: Authenticate JWT ====================
+const authenticateToken = (request, response, next) => {
+  const authHeader = request.headers["authorization"];
+  let jwtToken;
 
-app.post("/usersregister/",async(request,response) => {
-  const {id,username,password,name,gender,location} = request.body;
-  const hashedPassword = await bcrypt.hash(password,10) ;           // 10 is saltRounds
-  const selectUserQuery = `SELECT * FROM users WHERE username = '${username}';`; 
-  const dbUser = await db.get(selectUserQuery); 
+  if (authHeader !== undefined) {
+    jwtToken = authHeader.split(" ")[1];
+  }
 
-  if(dbUser === undefined) {
-    // create user in user table
-    const createUserQuery = `INSERT INTO users (id,username,password,name,gender,location) VALUES
-                             ('${id}',
-                             '${username}',
-                             '${hashedPassword}',
-                             '${name}',
-                             '${gender}',
-                             '${location}')`;
-    await db.run(createUserQuery);
-    response.send("User created sucessfully");
-  }else {
-    // send invalid user name as response
-    response.status(400);
-    response.send("User already exists");
+  if (jwtToken === undefined) {
+    response.status(401).send("Invalid JWT Token");
+  } else {
+    jwt.verify(jwtToken, JWT_SECRET, (error, payload) => {
+      if (error) {
+        response.status(401).send("Invalid JWT Token");
+      } else {
+        request.username = payload.username; // attach user info
+        next();
+      }
+    });
+  }
+};
+
+
+// ==================== Middleware 1: Authenticate JWT ====================
+
+const logger = (request,response,next) => {
+  console.log(request.query);
+  next();
+};
+
+
+
+// ==================== Register User ====================
+app.post("/usersregister/", async (request, response) => {
+  const { username, password, name, gender, location } = request.body;
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const selectUserQuery = `SELECT * FROM users WHERE username = ?`;
+  const dbUser = await db.get(selectUserQuery, [username]);
+
+  if (dbUser === undefined) {
+    const createUserQuery = `
+      INSERT INTO users (username, password, name, gender, location)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    await db.run(createUserQuery, [
+      username,
+      hashedPassword,
+      name,
+      gender,
+      location,
+    ]);
+    response.send("User created successfully");
+  } else {
+    response.status(400).send("User already exists");
   }
 });
 
-// ==================== Login Users Authentication =================
+// ==================== Login User ====================
+app.post("/login/", async (request, response) => {
+  const { username, password } = request.body;
 
-app.post("/login/", async(request,response) => {
-  const { username,password } = request.body;
-  const selectUserQuery = `SELECT * FROM users WHERE username = '${username}';`;
-  const dbUser = await db.get(selectUserQuery);
+  const selectUserQuery = `SELECT * FROM users WHERE username = ?`;
+  const dbUser = await db.get(selectUserQuery, [username]);
+
   if (dbUser === undefined) {
-    // user doesn't exist
-    response.status(400);
-    response.send("Invalid User");
+    response.status(400).send("Invalid User");
   } else {
-    // compare password, hashed password 
-    const isPasswordMatched = await bcrypt.compare(password,dbUser.password);
-    if (isPasswordMatched === true){
+    const isPasswordMatched = await bcrypt.compare(password, dbUser.password);
+    if (isPasswordMatched) {
       const payload = { username: username };
-      const jwtToken = jwt.sign(payload,"MY_SECRET_TOKEN");
-      response.send({jwtToken});
+      const jwtToken = jwt.sign(payload, JWT_SECRET);
+      response.send({ jwtToken });
     } else {
-      response.status(400);
-      response.send(" Invalid Password");
+      response.status(400).send("Invalid Password");
     }
   }
 });
 
+// ==================== Get User Profile ====================
 
-// ==================== GET all Users ====================
-app.get("/users/", async (request, response) => {
-  
-  const getuserQuery = `SELECT * FROM users;`;
-  const userArray = await db.all(getuserQuery);
-  response.send(userArray);
+app.get("/profile/",authenticateToken,async(request,response) => {
+  let { username } = request;
+  console.log(username);
+  const selectUserQuery = `SELECT * FROM users WHERE username = ?`;
+  const userDetails = await db.get(selectUserQuery);
+  response.send(userDetails);
 });
 
 
-// ==================== GET all books ====================
-app.get("/books/", async (request, response) => {
-  let jwtToken;
-  const { offset=2,limit=6,search_q = ""} = request.query;
-  const authHeader = request.headers["authorization"];
-  if (authHeader !== undefined) {
-    jwtToken = authHeader.split(" ")[1];
-  }
-  
-  if (jwtToken === undefined){
-    response.status(401);
-    response.send("Invalid JWT TOken");
-  } else {
-    jwt.verify(jwtToken, "My_SECRET_TOKEN", async(error,user) => {
-      if(error){
-        response.status(401);
-        response.send("Invalid JWT TOken");
-      } else {
-        const getBooksQuery = `SELECT * FROM book WHERE title LIKE '%${search_q}%' LIMIT ${limit} OFFSET ${offset};`;
-        const booksArray = await db.all(getBooksQuery);
-        response.send(booksArray);
-      }
-    });
-  }
+// ==================== Get All Users ====================
+app.get("/users/", async (request, response, next) => {
+  const getUsersQuery = `SELECT * FROM users;`;
+  const usersArray = await db.all(getUsersQuery);
+  response.send(usersArray);
 });
 
-// ==================== GET book by ID ====================
+// ================== Get All Books (with JWT auth) Using Middeleware function ====================
+app.get("/books/",logger,authenticateToken, async (request, response) => {
+  console.log("Get Books API")
+  const { offset = 0, limit = 10, search_q = "" } = request.query;
+
+  const getBooksQuery = `
+    SELECT * FROM book
+    WHERE title LIKE ?
+    LIMIT ? OFFSET ?
+  `;
+  const booksArray = await db.all(getBooksQuery, [
+    `%${search_q}%`,
+    limit,
+    offset,
+  ]);
+  response.send(booksArray);
+});
+
+// ==================== Get Book by ID ====================
 app.get("/books/:bookId/", async (request, response) => {
   const { bookId } = request.params;
-  const getBookQuery = `
-    SELECT * FROM book
-    WHERE id = ${bookId};
-  `;
-  const book = await db.get(getBookQuery);
-  response.send(book);
+
+  const getBookQuery = `SELECT * FROM book WHERE id = ?`;
+  const book = await db.get(getBookQuery, [bookId]);
+
+  if (book) {
+    response.send(book);
+  } else {
+    response.status(404).send("Book not found");
+  }
 });
 
-// ==================== POST add new book ====================
+// ==================== Add New Book ====================
 app.post("/postbooks/", async (request, response) => {
   const { title, author, rating } = request.body;
+
   const addBookQuery = `
     INSERT INTO book (title, author, rating)
-    VALUES ('${title}', '${author}', ${rating});
+    VALUES (?, ?, ?)
   `;
-  const dbResponse = await db.run(addBookQuery);
+  const dbResponse = await db.run(addBookQuery, [title, author, rating]);
   const bookId = dbResponse.lastID;
-  response.send({ bookId: bookId });
+
+  response.send({ bookId });
 });
 
-// ==================== PUT update book ====================
+// ==================== Update Book ====================
 app.put("/putbooks/:bookId/", async (request, response) => {
   const { bookId } = request.params;
   const { title, author, rating } = request.body;
+
   const updateBookQuery = `
     UPDATE book
-    SET 
-      title = '${title}',
-      author = '${author}',
-      rating = ${rating}
-    WHERE id = ${bookId};
+    SET title = ?, author = ?, rating = ?
+    WHERE id = ?
   `;
-  await db.run(updateBookQuery);
-  response.send("Book Updated Successfully");
+  const result = await db.run(updateBookQuery, [
+    title,
+    author,
+    rating,
+    bookId,
+  ]);
+
+  if (result.changes === 0) {
+    response.status(404).send("Book not found");
+  } else {
+    response.send("Book Updated Successfully");
+  }
 });
 
-// ==================== DELETE book ====================
-// app.delete("/books/:bookId/", async (request, response) => {
-//   const { bookId } = request.params;
-//   const deleteBookQuery = `
-//     DELETE FROM book
-//     WHERE id = ${bookId};
-//   `;
-//   await db.run(deleteBookQuery);
-//   response.send("Book Deleted Successfully");
-// });
+// ==================== Delete Book ====================
+app.delete("/books/:bookId/", async (request, response) => {
+  const { bookId } = request.params;
+
+  const deleteBookQuery = `DELETE FROM book WHERE id = ?`;
+  const result = await db.run(deleteBookQuery, [bookId]);
+
+  if (result.changes === 0) {
+    response.status(404).send("Book not found");
+  } else {
+    response.send("Book Deleted Successfully");
+  }
+});

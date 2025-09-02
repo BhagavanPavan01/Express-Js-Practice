@@ -1,15 +1,17 @@
 ### Add book
-POST http://localhost:3000/postbooks/64/
+PUT http://localhost:3000/putbooks/64/
 Content-Type: application/json
 
 {
-  "title": "Harry Potter and the Order of the Phoenix",
-  "author": "Bhagavan Pavan",
-  "rating": 4.67
+  "title": "Updated Title",
+  "author": "Jane Doe",
+  "rating": 5.0
 }
 
+
 ### Get all books
-GET http://localhost:3000/books/
+GET http://localhost:3000/books/?title=1984
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImtlZXJ0aGlkYXJsaW5nIiwiaWF0IjoxNzU2NzQwNTE2fQ.pUUuqnf5dgk3zH8VA5JFd6wkokxV-imGLMGS4diOJ-g
 
 ### Get url with parameters
 
@@ -18,13 +20,13 @@ GET http://localhost:3000/books/?offset=2&limit=4&search_q=The&order_by=price&or
 ### Create new user in user table
 
 POST http://localhost:3000/usersregister/
-Const-Type: application/json
+Content-Type: application/json
 
 {
-  "id" : 20,
-  "username" : "@darling",
-  "password" : "Darling123",
-  "name" : "Darling",
+  "id" : 14,
+  "username" : "mydarling",
+  "password" : "my@1234567",
+  "name" : "My Lover",
   "gender": "Female",
   "location" : "Kanimetta"
 }
@@ -35,8 +37,15 @@ POST http://localhost:3000/login/
 Content-Type: application/json
 
 {
-  "username" : "pavan",
-  "password" : "pavan@123"
+  "username" : "mydarling",
+  "password" : "my@1234567"
 }
 
+### TO get User Profile
+GET http://localhost:3000/profile/
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImtlZXJ0aGlkYXJsaW5nIiwiaWF0IjoxNzU2NzQwNTE2fQ.pUUuqnf5dgk3zH8VA5JFd6wkokxV-imGLMGS4diOJ-g
 
+
+### TO get another User Profile
+GET http://localhost:3000/profile/
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Im15ZGFybGluZyIsImlhdCI6MTc1Njc0NzYyN30.ZDsjE2xX0CJfz-sDZ_sn8FTugBKJmsYgNRhdjuAiAK8
